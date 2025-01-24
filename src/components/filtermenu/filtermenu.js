@@ -1,9 +1,10 @@
+import escapeHtml from 'escape-html';
 import dom from '../../scripts/dom';
 import focusManager from '../focusManager';
 import dialogHelper from '../dialogHelper/dialogHelper';
 import inputManager from '../../scripts/inputManager';
 import layoutManager from '../layoutManager';
-import globalize from '../../scripts/globalize';
+import globalize from '../../lib/globalize';
 import * as userSettings from '../../scripts/settings/userSettings';
 import '../../elements/emby-checkbox/emby-checkbox';
 import '../../elements/emby-input/emby-input';
@@ -12,7 +13,7 @@ import '../../elements/emby-button/paper-icon-button-light';
 import '../../elements/emby-select/emby-select';
 import 'material-design-icons-iconfont';
 import '../formdialog.scss';
-import '../../assets/css/flexstyles.scss';
+import '../../styles/flexstyles.scss';
 import ServerConnections from '../ServerConnections';
 import template from './filtermenu.template.html';
 
@@ -37,7 +38,7 @@ function renderOptions(context, selector, cssClass, items, isCheckedFn) {
         const checkedHtml = isCheckedFn(filter) ? ' checked' : '';
         itemHtml += '<label>';
         itemHtml += '<input is="emby-checkbox" type="checkbox"' + checkedHtml + ' data-filter="' + filter.Id + '" class="' + cssClass + '"/>';
-        itemHtml += '<span>' + filter.Name + '</span>';
+        itemHtml += '<span>' + escapeHtml(filter.Name) + '</span>';
         itemHtml += '</label>';
 
         return itemHtml;
@@ -56,7 +57,7 @@ function renderDynamicFilters(context, result, options) {
 
 function setBasicFilter(context, key, elem) {
     let value = elem.checked;
-    value = value ? value : null;
+    value = value || null;
     userSettings.setFilter(key, value);
 }
 function moveCheckboxFocus(elem, offset) {
@@ -102,45 +103,42 @@ function onInputCommand(e) {
     }
 }
 function saveValues(context, settings, settingsKey) {
-    let elems = context.querySelectorAll('.simpleFilter');
-    for (let i = 0, length = elems.length; i < length; i++) {
-        if (elems[i].tagName === 'INPUT') {
-            setBasicFilter(context, settingsKey + '-filter-' + elems[i].getAttribute('data-settingname'), elems[i]);
+    context.querySelectorAll('.simpleFilter').forEach(elem => {
+        if (elem.tagName === 'INPUT') {
+            setBasicFilter(context, settingsKey + '-filter-' + elem.getAttribute('data-settingname'), elem);
         } else {
-            setBasicFilter(context, settingsKey + '-filter-' + elems[i].getAttribute('data-settingname'), elems[i].querySelector('input'));
+            setBasicFilter(context, settingsKey + '-filter-' + elem.getAttribute('data-settingname'), elem.querySelector('input'));
         }
-    }
+    });
 
     // Video type
     const videoTypes = [];
-    elems = context.querySelectorAll('.chkVideoTypeFilter');
-
-    for (let i = 0, length = elems.length; i < length; i++) {
-        if (elems[i].checked) {
-            videoTypes.push(elems[i].getAttribute('data-filter'));
+    context.querySelectorAll('.chkVideoTypeFilter').forEach(elem => {
+        if (elem.checked) {
+            videoTypes.push(elem.getAttribute('data-filter'));
         }
-    }
+    });
+
     userSettings.setFilter(settingsKey + '-filter-VideoTypes', videoTypes.join(','));
 
     // Series status
     const seriesStatuses = [];
-    elems = context.querySelectorAll('.chkSeriesStatus');
-
-    for (let i = 0, length = elems.length; i < length; i++) {
-        if (elems[i].checked) {
-            seriesStatuses.push(elems[i].getAttribute('data-filter'));
+    context.querySelectorAll('.chkSeriesStatus').forEach(elem => {
+        if (elem.checked) {
+            seriesStatuses.push(elem.getAttribute('data-filter'));
         }
-    }
+    });
+
+    userSettings.setFilter(`${settingsKey}-filter-SeriesStatus`, seriesStatuses.join(','));
 
     // Genres
     const genres = [];
-    elems = context.querySelectorAll('.chkGenreFilter');
-
-    for (let i = 0, length = elems.length; i < length; i++) {
-        if (elems[i].checked) {
-            genres.push(elems[i].getAttribute('data-filter'));
+    context.querySelectorAll('.chkGenreFilter').forEach(elem => {
+        if (elem.checked) {
+            genres.push(elem.getAttribute('data-filter'));
         }
-    }
+    });
+
     userSettings.setFilter(settingsKey + '-filter-GenreIds', genres.join(','));
 }
 function bindCheckboxInput(context, on) {
@@ -228,7 +226,7 @@ class FilterMenu {
             let html = '';
 
             html += '<div class="formDialogHeader">';
-            html += '<button is="paper-icon-button-light" class="btnCancel hide-mouse-idle-tv" tabindex="-1"><span class="material-icons arrow_back"></span></button>';
+            html += `<button is="paper-icon-button-light" class="btnCancel hide-mouse-idle-tv" tabindex="-1" title="${globalize.translate('ButtonBack')}"><span class="material-icons arrow_back" aria-hidden="true"></span></button>`;
             html += '<h3 class="formDialogHeaderTitle">${Filters}</h3>';
 
             html += '</div>';
@@ -272,10 +270,8 @@ class FilterMenu {
                 }
 
                 if (submitted) {
-                    //if (!options.onChange) {
                     saveValues(dlg, options.settings, options.settingsKey);
                     return resolve();
-                    //}
                 }
                 return resolve();
             });

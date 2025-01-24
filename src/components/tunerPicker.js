@@ -1,7 +1,7 @@
 import dialogHelper from './dialogHelper/dialogHelper';
 import dom from '../scripts/dom';
 import layoutManager from './layoutManager';
-import globalize from '../scripts/globalize';
+import globalize from '../lib/globalize';
 import loading from './loading/loading';
 import browser from '../scripts/browser';
 import focusManager from './focusManager';
@@ -26,7 +26,8 @@ function getEditorHtml() {
     html += '<div is="emby-itemscontainer" class="results vertical-wrap">';
     html += '</div>';
     html += '</div>';
-    return html += '</div>';
+    html += '</div>';
+    return html;
 }
 
 function getDeviceHtml(device) {
@@ -50,7 +51,7 @@ function getDeviceHtml(device) {
     html += '<div class="cardScalable visualCardBox-cardScalable">';
     html += '<div class="' + padderClass + '"></div>';
     html += '<div class="cardContent searchImage">';
-    html += '<div class="cardImageContainer coveredImage"><span class="cardImageIcon material-icons dvr"></span></div>';
+    html += '<div class="cardImageContainer coveredImage"><span class="cardImageIcon material-icons dvr" aria-hidden="true"></span></div>';
     html += '</div>';
     html += '</div>';
     html += '<div class="cardFooter visualCardBox-cardFooter">';
@@ -61,11 +62,12 @@ function getDeviceHtml(device) {
     html += '</div>';
     html += '</div>';
     html += '</div>';
-    return html += '</button>';
+    html += '</button>';
+    return html;
 }
 
 function getTunerName(providerId) {
-    switch (providerId = providerId.toLowerCase()) {
+    switch (providerId.toLowerCase()) {
         case 'm3u':
             return 'M3U';
 
@@ -108,7 +110,7 @@ function renderDevices(view, devices) {
 function discoverDevices(view) {
     loading.show();
     view.querySelector('.loadingContent').classList.remove('hide');
-    return ApiClient.getJSON(ApiClient.getUrl('LiveTv/Tuners/Discvover', {
+    return ApiClient.getJSON(ApiClient.getUrl('LiveTv/Tuners/Discover', {
         NewDevicesOnly: true
     })).then(function (devices) {
         currentDevices = devices;
@@ -118,7 +120,7 @@ function discoverDevices(view) {
     });
 }
 
-function tunerPicker() {
+function TunerPicker() {
     this.show = function () {
         const dialogOptions = {
             removeOnClose: true,
@@ -135,7 +137,7 @@ function tunerPicker() {
         dlg.classList.add('formDialog');
         let html = '';
         html += '<div class="formDialogHeader">';
-        html += '<button is="paper-icon-button-light" class="btnCancel autoSize" tabindex="-1"><span class="material-icons arrow_back"></span></button>';
+        html += `<button is="paper-icon-button-light" class="btnCancel autoSize" tabindex="-1" title="${globalize.translate('ButtonBack')}"><span class="material-icons arrow_back" aria-hidden="true"></span></button>`;
         html += '<h3 class="formDialogHeaderTitle">';
         html += globalize.translate('HeaderLiveTvTunerSetup');
         html += '</h3>';
@@ -180,4 +182,4 @@ function tunerPicker() {
 
 let currentDevices = [];
 
-export default tunerPicker;
+export default TunerPicker;

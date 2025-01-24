@@ -1,7 +1,8 @@
+import escapeHtml from 'escape-html';
 import inputManager from '../../scripts/inputManager';
 import browser from '../../scripts/browser';
-import globalize from '../../scripts/globalize';
-import { Events } from 'jellyfin-apiclient';
+import globalize from '../../lib/globalize';
+import Events from '../../utils/events.ts';
 import scrollHelper from '../../scripts/scrollHelper';
 import serverNotifications from '../../scripts/serverNotifications';
 import loading from '../loading/loading';
@@ -16,19 +17,19 @@ import dom from '../../scripts/dom';
 import './guide.scss';
 import './programs.scss';
 import 'material-design-icons-iconfont';
-import '../../assets/css/scrollstyles.scss';
+import '../../styles/scrollstyles.scss';
 import '../../elements/emby-programcell/emby-programcell';
 import '../../elements/emby-button/emby-button';
 import '../../elements/emby-button/paper-icon-button-light';
 import '../../elements/emby-tabs/emby-tabs';
 import '../../elements/emby-scroller/emby-scroller';
-import '../../assets/css/flexstyles.scss';
+import '../../styles/flexstyles.scss';
 import 'webcomponents.js/webcomponents-lite';
 import ServerConnections from '../ServerConnections';
 import template from './tvguide.template.html';
 
 function showViewSettings(instance) {
-    import('./guide-settings').then(({default: guideSettingsDialog}) => {
+    import('./guide-settings').then(({ default: guideSettingsDialog }) => {
         guideSettingsDialog.show(instance.categoryOptions).then(function () {
             instance.refresh();
         });
@@ -166,7 +167,6 @@ function Guide(options) {
         stopAutoRefresh();
 
         Events.off(serverNotifications, 'TimerCreated', onTimerCreated);
-        Events.off(serverNotifications, 'SeriesTimerCreated', onSeriesTimerCreated);
         Events.off(serverNotifications, 'TimerCancelled', onTimerCancelled);
         Events.off(serverNotifications, 'SeriesTimerCancelled', onSeriesTimerCancelled);
 
@@ -291,7 +291,7 @@ function Guide(options) {
             showPremiereIndicator: allowIndicators && userSettings.get('guide-indicator-premiere') !== 'false',
             showNewIndicator: allowIndicators && userSettings.get('guide-indicator-new') !== 'false',
             showRepeatIndicator: allowIndicators && userSettings.get('guide-indicator-repeat') === 'true',
-            showEpisodeTitle: layoutManager.tv ? false : true
+            showEpisodeTitle: !layoutManager.tv
         };
 
         apiClient.getLiveTvChannels(channelQuery).then(function (channelsResult) {
@@ -345,7 +345,9 @@ function Guide(options) {
             }
 
             apiClient.getLiveTvPrograms(programQuery).then(function (programsResult) {
-                renderGuide(context, date, channelsResult.Items, programsResult.Items, renderOptions, apiClient, scrollToTimeMs, focusToTimeMs, startTimeOfDayMs, focusProgramOnRender);
+                const guideOptions = { focusProgramOnRender, scrollToTimeMs, focusToTimeMs, startTimeOfDayMs };
+
+                renderGuide(context, date, channelsResult.Items, programsResult.Items, renderOptions, guideOptions, apiClient);
 
                 hideLoading();
             });
@@ -409,7 +411,7 @@ function Guide(options) {
         let status;
 
         if (item.Type === 'SeriesTimer') {
-            return '<span class="material-icons programIcon seriesTimerIcon fiber_smart_record"></span>';
+            return '<span class="material-icons programIcon seriesTimerIcon fiber_smart_record" aria-hidden="true"></span>';
         } else if (item.TimerId || item.SeriesTimerId) {
             status = item.Status || 'Cancelled';
         } else if (item.Type === 'Timer') {
@@ -420,16 +422,16 @@ function Guide(options) {
 
         if (item.SeriesTimerId) {
             if (status !== 'Cancelled') {
-                return '<span class="material-icons programIcon seriesTimerIcon fiber_smart_record"></span>';
+                return '<span class="material-icons programIcon seriesTimerIcon fiber_smart_record" aria-hidden="true"></span>';
             }
 
-            return '<span class="material-icons programIcon seriesTimerIcon seriesTimerIcon-inactive fiber_smart_record"></span>';
+            return '<span class="material-icons programIcon seriesTimerIcon seriesTimerIcon-inactive fiber_smart_record" aria-hidden="true"></span>';
         }
 
-        return '<span class="material-icons programIcon timerIcon fiber_manual_record"></span>';
+        return '<span class="material-icons programIcon timerIcon fiber_manual_record" aria-hidden="true"></span>';
     }
 
-    function getChannelProgramsHtml(context, date, channel, programs, options, listInfo) {
+    function getChannelProgramsHtml(context, date, channel, programs, programOptions, listInfo) {
         let html = '';
 
         const startMs = date.getTime();
@@ -537,34 +539,34 @@ function Guide(options) {
 
                 html += '<div class="' + guideProgramNameClass + '">';
 
-                html += '<div class="guide-programNameCaret hide"><span class="guideProgramNameCaretIcon material-icons keyboard_arrow_left"></span></div>';
+                html += '<div class="guide-programNameCaret hide"><span class="guideProgramNameCaretIcon material-icons keyboard_arrow_left" aria-hidden="true"></span></div>';
 
-                html += '<div class="guideProgramNameText">' + program.Name;
+                html += '<div class="guideProgramNameText">' + escapeHtml(program.Name);
 
                 let indicatorHtml = null;
-                if (program.IsLive && options.showLiveIndicator) {
+                if (program.IsLive && programOptions.showLiveIndicator) {
                     indicatorHtml = '<span class="liveTvProgram guideProgramIndicator">' + globalize.translate('Live') + '</span>';
-                } else if (program.IsPremiere && options.showPremiereIndicator) {
+                } else if (program.IsPremiere && programOptions.showPremiereIndicator) {
                     indicatorHtml = '<span class="premiereTvProgram guideProgramIndicator">' + globalize.translate('Premiere') + '</span>';
-                } else if (program.IsSeries && !program.IsRepeat && options.showNewIndicator) {
+                } else if (program.IsSeries && !program.IsRepeat && programOptions.showNewIndicator) {
                     indicatorHtml = '<span class="newTvProgram guideProgramIndicator">' + globalize.translate('New') + '</span>';
-                } else if (program.IsSeries && program.IsRepeat && options.showRepeatIndicator) {
+                } else if (program.IsSeries && program.IsRepeat && programOptions.showRepeatIndicator) {
                     indicatorHtml = '<span class="repeatTvProgram guideProgramIndicator">' + globalize.translate('Repeat') + '</span>';
                 }
                 html += indicatorHtml || '';
 
-                if ((program.EpisodeTitle && options.showEpisodeTitle)) {
+                if ((program.EpisodeTitle && programOptions.showEpisodeTitle)) {
                     html += '<div class="guideProgramSecondaryInfo">';
 
-                    if (program.EpisodeTitle && options.showEpisodeTitle) {
-                        html += '<span class="programSecondaryTitle">' + program.EpisodeTitle + '</span>';
+                    if (program.EpisodeTitle && programOptions.showEpisodeTitle) {
+                        html += '<span class="programSecondaryTitle">' + escapeHtml(program.EpisodeTitle) + '</span>';
                     }
                     html += '</div>';
                 }
 
                 html += '</div>';
 
-                if (program.IsHD && options.showHdIcon) {
+                if (program.IsHD && programOptions.showHdIcon) {
                     if (layoutManager.tv) {
                         html += '<div class="programIcon guide-programTextIcon guide-programTextIcon-tv">HD</div>';
                     } else {
@@ -605,7 +607,7 @@ function Guide(options) {
                 title.push(channel.Name);
             }
 
-            html += '<button title="' + title.join(' ') + '" type="button" class="' + cssClass + '"' + ' data-action="link" data-isfolder="' + channel.IsFolder + '" data-id="' + channel.Id + '" data-serverid="' + channel.ServerId + '" data-type="' + channel.Type + '">';
+            html += '<button title="' + escapeHtml(title.join(' ')) + '" type="button" class="' + cssClass + '"' + ' data-action="link" data-isfolder="' + channel.IsFolder + '" data-id="' + channel.Id + '" data-serverid="' + channel.ServerId + '" data-type="' + channel.Type + '">';
 
             if (hasChannelImage) {
                 const url = apiClient.getScaledImageUrl(channel.Id, {
@@ -622,7 +624,7 @@ function Guide(options) {
             }
 
             if (!hasChannelImage && channel.Name) {
-                html += '<div class="guideChannelName">' + channel.Name + '</div>';
+                html += '<div class="guideChannelName">' + escapeHtml(channel.Name) + '</div>';
             }
 
             html += '</button>';
@@ -633,7 +635,7 @@ function Guide(options) {
         imageLoader.lazyChildren(channelList);
     }
 
-    function renderPrograms(context, date, channels, programs, options) {
+    function renderPrograms(context, date, channels, programs, programOptions) {
         const listInfo = {
             startIndex: 0
         };
@@ -641,7 +643,7 @@ function Guide(options) {
         const html = [];
 
         for (const channel of channels) {
-            html.push(getChannelProgramsHtml(context, date, channel, programs, options, listInfo));
+            html.push(getChannelProgramsHtml(context, date, channel, programs, programOptions, listInfo));
         }
 
         programGrid.innerHTML = html.join('');
@@ -667,18 +669,18 @@ function Guide(options) {
         return (channelIndex * 10000000) + (start.getTime() / 60000);
     }
 
-    function renderGuide(context, date, channels, programs, renderOptions, apiClient, scrollToTimeMs, focusToTimeMs, startTimeOfDayMs, focusProgramOnRender) {
+    function renderGuide(context, date, channels, programs, renderOptions, guideOptions, apiClient) {
         programs.sort(function (a, b) {
             return getProgramSortOrder(a, channels) - getProgramSortOrder(b, channels);
         });
 
         const activeElement = document.activeElement;
-        const itemId = activeElement && activeElement.getAttribute ? activeElement.getAttribute('data-id') : null;
+        const itemId = activeElement?.getAttribute ? activeElement.getAttribute('data-id') : null;
         let channelRowId = null;
 
         if (activeElement) {
             channelRowId = dom.parentWithClass(activeElement, 'channelPrograms');
-            channelRowId = channelRowId && channelRowId.getAttribute ? channelRowId.getAttribute('data-channelid') : null;
+            channelRowId = channelRowId?.getAttribute ? channelRowId.getAttribute('data-channelid') : null;
         }
 
         renderChannelHeaders(context, channels, apiClient);
@@ -689,11 +691,11 @@ function Guide(options) {
         items = {};
         renderPrograms(context, date, channels, programs, renderOptions);
 
-        if (focusProgramOnRender) {
-            focusProgram(context, itemId, channelRowId, focusToTimeMs, startTimeOfDayMs);
+        if (guideOptions.focusProgramOnRender) {
+            focusProgram(context, itemId, channelRowId, guideOptions.focusToTimeMs, guideOptions.startTimeOfDayMs);
         }
 
-        scrollProgramGridToTimeMs(context, scrollToTimeMs, startTimeOfDayMs);
+        scrollProgramGridToTimeMs(context, guideOptions.scrollToTimeMs, guideOptions.startTimeOfDayMs);
     }
 
     function scrollProgramGridToTimeMs(context, scrollToTimeMs, startTimeOfDayMs) {
@@ -760,12 +762,10 @@ function Guide(options) {
             } else {
                 container.scrollTo(0, pos);
             }
+        } else if (horizontal) {
+            container.scrollLeft = Math.round(pos);
         } else {
-            if (horizontal) {
-                container.scrollLeft = Math.round(pos);
-            } else {
-                container.scrollTop = Math.round(pos);
-            }
+            container.scrollTop = Math.round(pos);
         }
     }
 
@@ -1057,9 +1057,6 @@ function Guide(options) {
         }
     }
 
-    function onSeriesTimerCreated() {
-    }
-
     function onTimerCancelled(e, apiClient, data) {
         const id = data.Id;
         // find guide cells by timer id, remove timer icon
@@ -1150,12 +1147,12 @@ function Guide(options) {
     guideContext.querySelector('.guideDateTabs').addEventListener('tabchange', function (e) {
         const allTabButtons = e.target.querySelectorAll('.guide-date-tab-button');
 
-        const tabButton = allTabButtons[parseInt(e.detail.selectedTabIndex)];
+        const tabButton = allTabButtons[parseInt(e.detail.selectedTabIndex, 10)];
         if (tabButton) {
-            const previousButton = e.detail.previousIndex == null ? null : allTabButtons[parseInt(e.detail.previousIndex)];
+            const previousButton = e.detail.previousIndex == null ? null : allTabButtons[parseInt(e.detail.previousIndex, 10)];
 
             const date = new Date();
-            date.setTime(parseInt(tabButton.getAttribute('data-date')));
+            date.setTime(parseInt(tabButton.getAttribute('data-date'), 10));
 
             const scrollWidth = programGrid.scrollWidth;
             let scrollToTimeMs;
@@ -1167,7 +1164,7 @@ function Guide(options) {
 
             if (previousButton) {
                 const previousDate = new Date();
-                previousDate.setTime(parseInt(previousButton.getAttribute('data-date')));
+                previousDate.setTime(parseInt(previousButton.getAttribute('data-date'), 10));
 
                 scrollToTimeMs += (previousDate.getHours() * 60 * 60 * 1000);
                 scrollToTimeMs += (previousDate.getMinutes() * 60 * 1000);
@@ -1186,7 +1183,6 @@ function Guide(options) {
     Events.trigger(self, 'load');
 
     Events.on(serverNotifications, 'TimerCreated', onTimerCreated);
-    Events.on(serverNotifications, 'SeriesTimerCreated', onSeriesTimerCreated);
     Events.on(serverNotifications, 'TimerCancelled', onTimerCancelled);
     Events.on(serverNotifications, 'SeriesTimerCancelled', onSeriesTimerCancelled);
 

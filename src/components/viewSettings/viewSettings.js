@@ -1,6 +1,6 @@
 import dialogHelper from '../dialogHelper/dialogHelper';
 import layoutManager from '../layoutManager';
-import globalize from '../../scripts/globalize';
+import globalize from '../../lib/globalize';
 import * as userSettings from '../../scripts/settings/userSettings';
 import '../../elements/emby-checkbox/emby-checkbox';
 import '../../elements/emby-input/emby-input';
@@ -9,7 +9,7 @@ import '../../elements/emby-button/paper-icon-button-light';
 import '../../elements/emby-select/emby-select';
 import 'material-design-icons-iconfont';
 import '../formdialog.scss';
-import '../../assets/css/flexstyles.scss';
+import '../../styles/flexstyles.scss';
 import template from './viewSettings.template.html';
 
 function onSubmit(e) {
@@ -56,10 +56,8 @@ function showIfAllowed(context, selector, visible) {
 }
 
 class ViewSettings {
-    constructor() {
-    }
     show(options) {
-        return new Promise(function (resolve, reject) {
+        return new Promise(function (resolve) {
             const dialogOptions = {
                 removeOnClose: true,
                 scrollY: false
@@ -78,7 +76,7 @@ class ViewSettings {
             let html = '';
 
             html += '<div class="formDialogHeader">';
-            html += '<button is="paper-icon-button-light" class="btnCancel hide-mouse-idle-tv" tabindex="-1"><span class="material-icons arrow_back"></span></button>';
+            html += `<button is="paper-icon-button-light" class="btnCancel hide-mouse-idle-tv" tabindex="-1" title="${globalize.translate('ButtonBack')}"><span class="material-icons arrow_back" aria-hidden="true"></span></button>`;
             html += '<h3 class="formDialogHeaderTitle">${Settings}</h3>';
 
             html += '</div>';
@@ -101,8 +99,8 @@ class ViewSettings {
             initEditor(dlg, options.settings);
 
             dlg.querySelector('.selectImageType').addEventListener('change', function () {
-                showIfAllowed(dlg, '.chkTitleContainer', this.value !== 'list');
-                showIfAllowed(dlg, '.chkYearContainer', this.value !== 'list');
+                showIfAllowed(dlg, '.chkTitleContainer', this.value !== 'list' && this.value !== 'banner');
+                showIfAllowed(dlg, '.chkYearContainer', this.value !== 'list' && this.value !== 'banner');
             });
 
             dlg.querySelector('.btnCancel').addEventListener('click', function () {
@@ -128,11 +126,10 @@ class ViewSettings {
 
                 if (submitted) {
                     saveValues(dlg, options.settings, options.settingsKey);
-                    resolve();
-                    return;
+                    return resolve();
                 }
 
-                reject();
+                return resolve();
             });
         });
     }

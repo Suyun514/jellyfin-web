@@ -1,7 +1,8 @@
-import React, { FunctionComponent, useEffect, useRef } from 'react';
+import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client';
+import React, { type FC, useEffect, useRef } from 'react';
 
 import cardBuilder from '../cardbuilder/cardBuilder';
-
+import type { CardOptions } from 'types/cardOptions';
 import '../../elements/emby-scroller/emby-scroller';
 import '../../elements/emby-itemscontainer/emby-itemscontainer';
 
@@ -15,25 +16,18 @@ const createScroller = ({ title = '' }) => ({
 </div>`
 });
 
-type SearchResultsRowProps = {
+interface SearchResultsRowProps {
     title?: string;
-    items?: Array<any>; // TODO: Should be Array<BaseItemDto> once we have a typed API client
-    cardOptions?: Record<string, any>;
+    items?: BaseItemDto[];
+    cardOptions?: CardOptions;
 }
 
-const SearchResultsRow: FunctionComponent<SearchResultsRowProps> = ({ title, items = [], cardOptions = {} }: SearchResultsRowProps) => {
-    const element = useRef(null);
+const SearchResultsRow: FC<SearchResultsRowProps> = ({ title, items = [], cardOptions = {} }) => {
+    const element = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         cardBuilder.buildCards(items, {
             itemsContainer: element.current?.querySelector('.itemsContainer'),
-            parentContainer: element.current,
-            shape: 'autooverflow',
-            scalable: true,
-            showTitle: true,
-            overlayText: false,
-            centerText: true,
-            allowBottomPadding: false,
             ...cardOptions
         });
     }, [cardOptions, items]);

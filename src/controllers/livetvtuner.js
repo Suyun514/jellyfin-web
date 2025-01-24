@@ -1,11 +1,12 @@
-import globalize from '../scripts/globalize';
+import globalize from '../lib/globalize';
 import loading from '../components/loading/loading';
 import dom from '../scripts/dom';
 import '../elements/emby-input/emby-input';
 import '../elements/emby-button/emby-button';
 import '../elements/emby-checkbox/emby-checkbox';
 import '../elements/emby-select/emby-select';
-import Dashboard from '../scripts/clientUtils';
+import Dashboard from '../utils/dashboard';
+import { getParameterByName } from '../utils/url.ts';
 
 function isM3uVariant(type) {
     return ['nextpvr'].indexOf(type || '') !== -1;
@@ -60,6 +61,10 @@ function fillTunerHostInfo(view, info) {
     view.querySelector('.chkFavorite').checked = info.ImportFavoritesOnly;
     view.querySelector('.chkTranscode').checked = info.AllowHWTranscoding;
     view.querySelector('.chkStreamLoop').checked = info.EnableStreamLooping;
+    view.querySelector('.chkFmp4Container').checked = info.AllowFmp4TranscodingContainer;
+    view.querySelector('.chkStreamSharing').checked = info.AllowStreamSharing;
+    view.querySelector('.chkIgnoreDts').checked = info.IgnoreDts;
+    view.querySelector('.txtFallbackMaxStreamingBitrate').value = info.FallbackMaxStreamingBitrate / 1e6 || '30';
     view.querySelector('.txtTunerCount').value = info.TunerCount || '0';
 }
 
@@ -72,9 +77,13 @@ function submitForm(page) {
         FriendlyName: page.querySelector('.txtFriendlyName').value || null,
         DeviceId: page.querySelector('.fldDeviceId').value || null,
         TunerCount: page.querySelector('.txtTunerCount').value || 0,
+        FallbackMaxStreamingBitrate: parseInt(1e6 * parseFloat(page.querySelector('.txtFallbackMaxStreamingBitrate').value || '30'), 10),
         ImportFavoritesOnly: page.querySelector('.chkFavorite').checked,
         AllowHWTranscoding: page.querySelector('.chkTranscode').checked,
-        EnableStreamLooping: page.querySelector('.chkStreamLoop').checked
+        AllowFmp4TranscodingContainer: page.querySelector('.chkFmp4Container').checked,
+        AllowStreamSharing: page.querySelector('.chkStreamSharing').checked,
+        EnableStreamLooping: page.querySelector('.chkStreamLoop').checked,
+        IgnoreDts: page.querySelector('.chkIgnoreDts').checked
     };
 
     if (isM3uVariant(info.Type)) {
@@ -93,7 +102,7 @@ function submitForm(page) {
         contentType: 'application/json'
     }).then(function () {
         Dashboard.processServerConfigurationUpdateResult();
-        Dashboard.navigate('livetvstatus.html');
+        Dashboard.navigate('dashboard/livetv');
     }, function () {
         loading.hide();
         Dashboard.alert({
@@ -103,8 +112,8 @@ function submitForm(page) {
 }
 
 function getDetectedDevice() {
-    return import('../components/tunerPicker').then(({default: tunerPicker}) => {
-        return new tunerPicker().show({
+    return import('../components/tunerPicker').then(({ default: TunerPicker }) => {
+        return new TunerPicker().show({
             serverId: ApiClient.serverId()
         });
     });
@@ -119,8 +128,12 @@ function onTypeChange() {
     const supportsTunerIpAddress = value === 'hdhomerun';
     const supportsTunerFileOrUrl = value === 'm3u';
     const supportsStreamLooping = value === 'm3u';
+    const supportsIgnoreDts = value === 'm3u';
     const supportsTunerCount = value === 'm3u';
     const supportsUserAgent = value === 'm3u';
+    const supportsFmp4Container = value === 'm3u';
+    const supportsStreamSharing = value === 'm3u';
+    const supportsFallbackBitrate = value === 'm3u' || value === 'hdhomerun';
     const suppportsSubmit = value !== 'other';
     const supportsSelectablePath = supportsTunerFileOrUrl;
     const txtDevicePath = view.querySelector('.txtDevicePath');
@@ -161,10 +174,20 @@ function onTypeChange() {
         view.querySelector('.fldTranscode').classList.add('hide');
     }
 
+    view.querySelector('.fldFmp4Container').classList.toggle('hide', !supportsFmp4Container);
+    view.querySelector('.fldStreamSharing').classList.toggle('hide', !supportsStreamSharing);
+    view.querySelector('.fldFallbackMaxStreamingBitrate').classList.toggle('hide', !supportsFallbackBitrate);
+
     if (supportsStreamLooping) {
         view.querySelector('.fldStreamLoop').classList.remove('hide');
     } else {
         view.querySelector('.fldStreamLoop').classList.add('hide');
+    }
+
+    if (supportsIgnoreDts) {
+        view.querySelector('.fldIgnoreDts').classList.remove('hide');
+    } else {
+        view.querySelector('.fldIgnoreDts').classList.add('hide');
     }
 
     if (supportsTunerCount) {
@@ -212,7 +235,7 @@ export default function (view, params) {
         });
     });
     view.querySelector('.btnSelectPath').addEventListener('click', function () {
-        import('../components/directorybrowser/directorybrowser').then(({default: DirectoryBrowser}) => {
+        import('../components/directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
             const picker = new DirectoryBrowser();
             picker.show({
                 includeFiles: true,

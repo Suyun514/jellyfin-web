@@ -114,7 +114,7 @@ button::-moz-focus-inner {
 }
 
 .card.show-animation:focus > .cardBox {
-    transform: scale(1.18, 1.18);
+    transform: scale(1.07, 1.07);
 }
 
 .cardBox-bottompadded {
@@ -158,6 +158,7 @@ button::-moz-focus-inner {
     color: #fff;
     background: rgb(51, 136, 204);
     box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.2);
+    z-index: 1;
 }
 
 .cardImageContainer {
@@ -171,6 +172,7 @@ button::-moz-focus-inner {
     position: relative;
     background-clip: content-box !important;
     color: inherit;
+    text-decoration: none;
 }
 
 .cardContent.cardImageContainer {
@@ -225,6 +227,10 @@ button::-moz-focus-inner {
 
 .cardContent:not(.defaultCardBackground) {
     background-color: transparent;
+}
+
+.cardPadder {
+    position: relative; // For centering the cardImageIcon
 }
 
 .cardBox:not(.visualCardBox) .cardPadder {
@@ -297,7 +303,14 @@ button::-moz-focus-inner {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-align: left;
+
+    [dir="ltr"] & {
+        text-align: left;
+    }
+
+    [dir="rtl"] & {
+        text-align: right;
+    }
 }
 
 .dialog .cardText {
@@ -323,6 +336,7 @@ button::-moz-focus-inner {
     vertical-align: middle;
     font-family: inherit;
     font-size: inherit;
+    text-decoration: none;
 }
 
 .textActionButton:hover {
@@ -333,6 +347,7 @@ button::-moz-focus-inner {
     width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+    text-align: left;
 }
 
 .innerCardFooter > .cardText {
@@ -355,15 +370,16 @@ button::-moz-focus-inner {
     background-position: center center;
 }
 
-.cardTextCentered {
-    text-align: center;
+.cardTextCentered,
+.cardTextCentered > .textActionButton {
+    text-align: center !important;
 }
 
 .cardText-rightmargin {
     margin-right: 2em;
 }
 
-.cardDefaultText {
+.cardImageContainer > .cardDefaultText {
     white-space: normal;
     text-align: center;
     font-size: 2em;
@@ -375,22 +391,49 @@ button::-moz-focus-inner {
     color: inherit;
 }
 
+.cardPadder .cardImageIcon {
+    color: #111;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.cardImageContainer .cardImageIcon {
+    margin: auto; /* 'justify-content: center' doesn't work in Safari 10 */
+}
+
 .cardIndicators {
-    right: 0.225em;
     top: 0.225em;
     position: absolute;
     display: flex;
     align-items: center;
     contain: layout style;
+    z-index: 1;
+
+    [dir="ltr"] & {
+        right: 0.225em;
+    }
+
+    [dir="rtl"] & {
+        left: 0.225em;
+    }
 }
 
 .cardProgramAttributeIndicators {
     top: 0;
-    left: 0;
     position: absolute;
     display: flex;
     text-transform: uppercase;
     font-size: 92%;
+
+    [dir="ltr"] & {
+        left: 0;
+    }
+
+    [dir="rtl"] & {
+        right: 0;
+    }
 }
 
 .programAttributeIndicator {
@@ -410,7 +453,14 @@ button::-moz-focus-inner {
 .cardOverlayButton-br {
     position: absolute;
     bottom: 0;
-    right: 0;
+
+    [dir="ltr"] & {
+        right: 0;
+    }
+
+    [dir="rtl"] & {
+        left: 0;
+    }
 }
 
 .cardOverlayButtonIcon {
@@ -804,7 +854,7 @@ button::-moz-focus-inner {
     opacity: 1;
 }
 
-.cardOverlayFab-primary {
+.cardOverlayContainer > .cardOverlayFab-primary {
     background-color: rgba(0, 0, 0, 0.7);
     font-size: 130%;
     padding: 0;
@@ -817,7 +867,7 @@ button::-moz-focus-inner {
     left: 50%;
 }
 
-.cardOverlayFab-primary:hover {
+.cardOverlayContainer > .cardOverlayFab-primary:hover {
     transform: scale(1.4, 1.4);
     transition: 0.2s;
 }

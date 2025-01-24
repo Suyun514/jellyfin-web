@@ -3,21 +3,22 @@ import loading from '../../components/loading/loading';
 import keyboardnavigation from '../../scripts/keyboardNavigation';
 import dialogHelper from '../../components/dialogHelper/dialogHelper';
 import dom from '../../scripts/dom';
-import { appRouter } from '../../components/appRouter';
+import { appRouter } from '../../components/router/appRouter';
+import { PluginType } from '../../types/plugin.ts';
+import Events from '../../utils/events.ts';
+
 import './style.scss';
 import '../../elements/emby-button/paper-icon-button-light';
-import { Events } from 'jellyfin-apiclient';
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 
 export class PdfPlayer {
     constructor() {
         this.name = 'PDF Player';
-        this.type = 'mediaplayer';
+        this.type = PluginType.MediaPlayer;
         this.id = 'pdfplayer';
         this.priority = 1;
 
         this.onDialogClosed = this.onDialogClosed.bind(this);
-        this.onWindowKeyUp = this.onWindowKeyUp.bind(this);
+        this.onWindowKeyDown = this.onWindowKeyDown.bind(this);
         this.onTouchStart = this.onTouchStart.bind(this);
     }
 
@@ -36,6 +37,12 @@ export class PdfPlayer {
     stop() {
         this.unbindEvents();
 
+        const stopInfo = {
+            src: this.item
+        };
+
+        Events.trigger(this, 'stopped', [stopInfo]);
+
         const elem = this.mediaElement;
         if (elem) {
             dialogHelper.close(elem);
@@ -47,6 +54,10 @@ export class PdfPlayer {
 
         // cancel page render
         this.cancellationToken = true;
+    }
+
+    destroy() {
+        // Nothing to do here
     }
 
     currentItem() {
@@ -77,22 +88,29 @@ export class PdfPlayer {
         return true;
     }
 
-    onWindowKeyUp(e) {
+    onWindowKeyDown(e) {
+        if (!this.loaded) return;
+
+        // Skip modified keys
+        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+
         const key = keyboardnavigation.getKeyName(e);
 
-        if (!this.loaded) return;
         switch (key) {
             case 'l':
             case 'ArrowRight':
             case 'Right':
+                e.preventDefault();
                 this.next();
                 break;
             case 'j':
             case 'ArrowLeft':
             case 'Left':
+                e.preventDefault();
                 this.previous();
                 break;
             case 'Escape':
+                e.preventDefault();
                 this.stop();
                 break;
         }
@@ -114,14 +132,14 @@ export class PdfPlayer {
     bindMediaElementEvents() {
         const elem = this.mediaElement;
 
-        elem.addEventListener('close', this.onDialogClosed, {once: true});
-        elem.querySelector('.btnExit').addEventListener('click', this.onDialogClosed, {once: true});
+        elem.addEventListener('close', this.onDialogClosed, { once: true });
+        elem.querySelector('.btnExit').addEventListener('click', this.onDialogClosed, { once: true });
     }
 
     bindEvents() {
         this.bindMediaElementEvents();
 
-        document.addEventListener('keyup', this.onWindowKeyUp);
+        document.addEventListener('keydown', this.onWindowKeyDown);
         document.addEventListener('touchstart', this.onTouchStart);
     }
 
@@ -137,7 +155,7 @@ export class PdfPlayer {
             this.unbindMediaElementEvents();
         }
 
-        document.removeEventListener('keyup', this.onWindowKeyUp);
+        document.removeEventListener('keydown', this.onWindowKeyDown);
         document.removeEventListener('touchstart', this.onTouchStart);
     }
 
@@ -161,7 +179,7 @@ export class PdfPlayer {
             let html = '';
             html += '<canvas id="canvas"></canvas>';
             html += '<div class="actionButtons">';
-            html += '<button is="paper-icon-button-light" class="autoSize btnExit" tabindex="-1"><i class="material-icons actionButtonIcon close"></i></button>';
+            html += '<button is="paper-icon-button-light" class="autoSize btnExit" tabindex="-1"><span class="material-icons actionButtonIcon close" aria-hidden="true"></span></button>';
             html += '</div>';
 
             elem.id = 'pdfPlayer';
@@ -181,6 +199,7 @@ export class PdfPlayer {
         this.streamInfo = {
             started: true,
             ended: false,
+            item: this.item,
             mediaSource: {
                 Id: item.Id
             }
@@ -189,14 +208,19 @@ export class PdfPlayer {
         const serverId = item.ServerId;
         const apiClient = ServerConnections.getApiClient(serverId);
 
-        return new Promise((resolve) => {
+        return import('pdfjs-dist').then(({ GlobalWorkerOptions, getDocument }) => {
             const downloadHref = apiClient.getItemDownloadUrl(item.Id);
 
             this.bindEvents();
             GlobalWorkerOptions.workerSrc = appRouter.baseUrl() + '/libraries/pdf.worker.js';
 
-            const downloadTask = getDocument(downloadHref);
-            downloadTask.promise.then(book => {
+            const downloadTask = getDocument({
+                url: downloadHref,
+                // Disable for PDF.js XSS vulnerability
+                // https://github.com/mozilla/pdf.js/security/advisories/GHSA-wgrm-67xf-hhpq
+                isEvalSupported: false
+            });
+            return downloadTask.promise.then(book => {
                 if (this.cancellationToken) return;
                 this.book = book;
                 this.loaded = true;
@@ -208,8 +232,6 @@ export class PdfPlayer {
                 } else {
                     this.loadPage(1);
                 }
-
-                return resolve();
             });
         });
     }
@@ -218,12 +240,16 @@ export class PdfPlayer {
         if (this.progress === this.duration() - 1) return;
         this.loadPage(this.progress + 2);
         this.progress = this.progress + 1;
+
+        Events.trigger(this, 'pause');
     }
 
     previous() {
         if (this.progress === 0) return;
         this.loadPage(this.progress);
         this.progress = this.progress - 1;
+
+        Events.trigger(this, 'pause');
     }
 
     replaceCanvas(canvas) {
@@ -248,7 +274,7 @@ export class PdfPlayer {
         for (const page of pages) {
             if (!this.pages[page]) {
                 this.pages[page] = document.createElement('canvas');
-                this.renderPage(this.pages[page], parseInt(page.substr(4)));
+                this.renderPage(this.pages[page], parseInt(page.slice(4), 10));
             }
         }
 
@@ -264,19 +290,25 @@ export class PdfPlayer {
     }
 
     renderPage(canvas, number) {
+        const devicePixelRatio = window.devicePixelRatio || 1;
         this.book.getPage(number).then(page => {
-            Events.trigger(this, 'timeupdate');
-
             const original = page.getViewport({ scale: 1 });
-            const context = canvas.getContext('2d');
-
-            const widthRatio = dom.getWindowSize().innerWidth / original.width;
-            const heightRatio = dom.getWindowSize().innerHeight / original.height;
-            const scale = Math.min(heightRatio, widthRatio);
-            const viewport = page.getViewport({ scale: scale });
+            const scale = Math.min((window.innerHeight / original.height), (window.innerWidth / original.width)) * devicePixelRatio;
+            const viewport = page.getViewport({ scale });
 
             canvas.width = viewport.width;
             canvas.height = viewport.height;
+
+            if (window.innerWidth < window.innerHeight) {
+                canvas.style.width = '100%';
+                canvas.style.height = 'auto';
+            } else {
+                canvas.style.height = '100%';
+                canvas.style.width = 'auto';
+            }
+
+            const context = canvas.getContext('2d');
+
             const renderContext = {
                 canvasContext: context,
                 viewport: viewport
@@ -294,11 +326,7 @@ export class PdfPlayer {
     }
 
     canPlayItem(item) {
-        if (item.Path && item.Path.endsWith('pdf')) {
-            return true;
-        }
-
-        return false;
+        return item.Path?.endsWith('pdf');
     }
 }
 

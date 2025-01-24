@@ -1,212 +1,227 @@
 import dom from '../../scripts/dom';
 import { playbackManager } from '../playback/playbackmanager';
-import { Events } from 'jellyfin-apiclient';
+import Events from '../../utils/events.ts';
 import mediaInfo from '../mediainfo/mediainfo';
 import layoutManager from '../layoutManager';
 import focusManager from '../focusManager';
-import globalize from '../../scripts/globalize';
+import globalize from '../../lib/globalize';
 import itemHelper from '../itemHelper';
+import ServerConnections from '../ServerConnections';
 import './upnextdialog.scss';
 import '../../elements/emby-button/emby-button';
-import '../../assets/css/flexstyles.scss';
+import '../../styles/flexstyles.scss';
 
-/* eslint-disable indent */
+const transitionEndEventName = dom.whichTransitionEvent();
 
-    const transitionEndEventName = dom.whichTransitionEvent();
+function getHtml() {
+    let html = '';
 
-    function getHtml() {
-        let html = '';
+    html += '<div class="flex flex-direction-column flex-grow">';
 
-        html += '<div class="flex flex-direction-column flex-grow">';
+    html += '<h2 class="upNextDialog-nextVideoText" style="margin:.25em 0;">&nbsp;</h2>';
 
-        html += '<h2 class="upNextDialog-nextVideoText" style="margin:.25em 0;">&nbsp;</h2>';
+    html += '<h3 class="upNextDialog-title" style="margin:.25em 0 .5em;"></h3>';
 
-        html += '<h3 class="upNextDialog-title" style="margin:.25em 0 .5em;"></h3>';
+    html += '<div class="flex flex-direction-row upNextDialog-mediainfo">';
+    html += '</div>';
 
-        html += '<div class="flex flex-direction-row upNextDialog-mediainfo">';
-        html += '</div>';
+    html += '<div class="flex flex-direction-row upNextDialog-buttons" style="margin-top:1em;">';
 
-        html += '<div class="flex flex-direction-row upNextDialog-buttons" style="margin-top:1em;">';
+    html += '<button type="button" is="emby-button" class="raised raised-mini btnStartNow upNextDialog-button">';
+    html += globalize.translate('HeaderStartNow');
+    html += '</button>';
 
-        html += '<button type="button" is="emby-button" class="raised raised-mini btnStartNow upNextDialog-button">';
-        html += globalize.translate('HeaderStartNow');
-        html += '</button>';
+    html += '<button type="button" is="emby-button" class="raised raised-mini btnHide upNextDialog-button">';
+    html += globalize.translate('Hide');
+    html += '</button>';
 
-        html += '<button type="button" is="emby-button" class="raised raised-mini btnHide upNextDialog-button">';
-        html += globalize.translate('Hide');
-        html += '</button>';
+    // buttons
+    html += '</div>';
 
-        // buttons
-        html += '</div>';
+    // main
+    html += '</div>';
 
-        // main
-        html += '</div>';
+    return html;
+}
 
-        return html;
-    }
+function setNextVideoText() {
+    const instance = this;
 
-    function setNextVideoText() {
-        const instance = this;
+    const elem = instance.options.parent;
 
-        const elem = instance.options.parent;
+    const secondsRemaining = Math.max(Math.round(getTimeRemainingMs(instance) / 1000), 0);
 
-        const secondsRemaining = Math.max(Math.round(getTimeRemainingMs(instance) / 1000), 0);
+    console.debug('up next seconds remaining: ' + secondsRemaining);
 
-        console.debug('up next seconds remaining: ' + secondsRemaining);
+    const timeText = '<span class="upNextDialog-countdownText">' + globalize.translate('HeaderSecondsValue', secondsRemaining) + '</span>';
 
-        const timeText = '<span class="upNextDialog-countdownText">' + globalize.translate('HeaderSecondsValue', secondsRemaining) + '</span>';
-
-        const nextVideoText = instance.itemType === 'Episode' ?
-            globalize.translate('HeaderNextEpisodePlayingInValue', timeText) :
+    let nextVideoText;
+    if (instance.itemType === 'Episode') {
+        nextVideoText = instance.showStaticNextText ?
+            globalize.translate('HeaderNextEpisode') :
+            globalize.translate('HeaderNextEpisodePlayingInValue', timeText);
+    } else {
+        nextVideoText = instance.showStaticNextText ?
+            globalize.translate('HeaderNextVideo') :
             globalize.translate('HeaderNextVideoPlayingInValue', timeText);
-
-        elem.querySelector('.upNextDialog-nextVideoText').innerHTML = nextVideoText;
     }
 
-    function fillItem(item) {
-        const instance = this;
+    elem.querySelector('.upNextDialog-nextVideoText').innerHTML = nextVideoText;
+}
 
-        const elem = instance.options.parent;
+function fillItem(item) {
+    const instance = this;
 
-        elem.querySelector('.upNextDialog-mediainfo').innerHTML = mediaInfo.getPrimaryMediaInfoHtml(item, {
-            criticRating: false,
-            originalAirDate: false,
-            starRating: false,
-            subtitles: false
+    const elem = instance.options.parent;
+
+    elem.querySelector('.upNextDialog-mediainfo').innerHTML = mediaInfo.getPrimaryMediaInfoHtml(item, {
+        criticRating: true,
+        originalAirDate: false,
+        starRating: true,
+        subtitles: false
+    });
+
+    let title = itemHelper.getDisplayName(item);
+    if (item.SeriesName) {
+        title = item.SeriesName + ' - ' + title;
+    }
+
+    elem.querySelector('.upNextDialog-title').innerText = title || '';
+
+    instance.itemType = item.Type;
+
+    instance.show();
+}
+
+function clearCountdownTextTimeout(instance) {
+    if (instance._countdownTextTimeout) {
+        clearInterval(instance._countdownTextTimeout);
+        instance._countdownTextTimeout = null;
+    }
+}
+
+async function onStartNowClick() {
+    const options = this.options;
+
+    if (options) {
+        const player = options.player;
+
+        await this.hide();
+
+        playbackManager.nextTrack(player);
+    }
+}
+
+async function init(instance, options) {
+    instance.showStaticNextText = await showStaticNextText(options.nextItem);
+
+    options.parent.innerHTML = getHtml();
+
+    options.parent.classList.add('hide');
+    options.parent.classList.add('upNextDialog');
+    options.parent.classList.add('upNextDialog-hidden');
+
+    fillItem.call(instance, options.nextItem);
+
+    options.parent.querySelector('.btnHide').addEventListener('click', instance.hide.bind(instance));
+    options.parent.querySelector('.btnStartNow').addEventListener('click', onStartNowClick.bind(instance));
+}
+
+function clearHideAnimationEventListeners(instance, elem) {
+    const fn = instance._onHideAnimationComplete;
+
+    if (fn) {
+        dom.removeEventListener(elem, transitionEndEventName, fn, {
+            once: true
+        });
+    }
+}
+
+function onHideAnimationComplete(e) {
+    const instance = this;
+    const elem = e.target;
+
+    elem.classList.add('hide');
+
+    clearHideAnimationEventListeners(instance, elem);
+    Events.trigger(instance, 'hide');
+}
+
+async function hideComingUpNext() {
+    const instance = this;
+    clearCountdownTextTimeout(this);
+
+    if (!instance.options) {
+        return;
+    }
+
+    const elem = instance.options.parent;
+
+    if (!elem) {
+        return;
+    }
+
+    clearHideAnimationEventListeners(this, elem);
+
+    if (elem.classList.contains('upNextDialog-hidden')) {
+        return;
+    }
+
+    const fn = onHideAnimationComplete.bind(instance);
+    instance._onHideAnimationComplete = fn;
+
+    const transitionEvent = await new Promise((resolve) => {
+        dom.addEventListener(elem, transitionEndEventName, resolve, {
+            once: true
         });
 
-        let title = itemHelper.getDisplayName(item);
-        if (item.SeriesName) {
-            title = item.SeriesName + ' - ' + title;
-        }
+        // trigger a reflow to force it to animate again
+        void elem.offsetWidth;
 
-        elem.querySelector('.upNextDialog-title').innerHTML = title || '';
+        elem.classList.add('upNextDialog-hidden');
+    });
 
-        instance.itemType = item.Type;
+    instance._onHideAnimationComplete(transitionEvent);
+}
 
-        instance.show();
-    }
+function getTimeRemainingMs(instance) {
+    const options = instance.options;
+    if (options) {
+        const runtimeTicks = playbackManager.duration(options.player);
 
-    function clearCountdownTextTimeout(instance) {
-        if (instance._countdownTextTimeout) {
-            clearInterval(instance._countdownTextTimeout);
-            instance._countdownTextTimeout = null;
-        }
-    }
+        if (runtimeTicks) {
+            const timeRemainingTicks = runtimeTicks - playbackManager.currentTime(options.player) * 10000;
 
-    async function onStartNowClick() {
-        const options = this.options;
-
-        if (options) {
-            const player = options.player;
-
-            await this.hide();
-
-            playbackManager.nextTrack(player);
+            return Math.round(timeRemainingTicks / 10000);
         }
     }
 
-    function init(instance, options) {
-        options.parent.innerHTML = getHtml();
+    return 0;
+}
 
-        options.parent.classList.add('hide');
-        options.parent.classList.add('upNextDialog');
-        options.parent.classList.add('upNextDialog-hidden');
+function startComingUpNextHideTimer(instance) {
+    const timeRemainingMs = getTimeRemainingMs(instance);
 
-        fillItem.call(instance, options.nextItem);
-
-        options.parent.querySelector('.btnHide').addEventListener('click', instance.hide.bind(instance));
-        options.parent.querySelector('.btnStartNow').addEventListener('click', onStartNowClick.bind(instance));
+    if (timeRemainingMs <= 0) {
+        return;
     }
 
-    function clearHideAnimationEventListeners(instance, elem) {
-        const fn = instance._onHideAnimationComplete;
+    setNextVideoText.call(instance);
+    clearCountdownTextTimeout(instance);
 
-        if (fn) {
-            dom.removeEventListener(elem, transitionEndEventName, fn, {
-                once: true
-            });
-        }
-    }
+    if (!instance.showStaticNextText) instance._countdownTextTimeout = setInterval(setNextVideoText.bind(instance), 400);
+}
 
-    function onHideAnimationComplete(e) {
-        const instance = this;
-        const elem = e.target;
-
-        elem.classList.add('hide');
-
-        clearHideAnimationEventListeners(instance, elem);
-        Events.trigger(instance, 'hide');
-    }
-
-    async function hideComingUpNext() {
-        const instance = this;
-        clearCountdownTextTimeout(this);
-
-        if (!instance.options) {
-            return;
-        }
-
-        const elem = instance.options.parent;
-
-        if (!elem) {
-            return;
-        }
-
-        clearHideAnimationEventListeners(this, elem);
-
-        if (elem.classList.contains('upNextDialog-hidden')) {
-            return;
-        }
-
-        const fn = onHideAnimationComplete.bind(instance);
-        instance._onHideAnimationComplete = fn;
-
-        const transitionEvent = await new Promise((resolve) => {
-            dom.addEventListener(elem, transitionEndEventName, resolve, {
-                once: true
-            });
-
-            // trigger a reflow to force it to animate again
-            void elem.offsetWidth;
-
-            elem.classList.add('upNextDialog-hidden');
-        });
-
-        instance._onHideAnimationComplete(transitionEvent);
-    }
-
-    function getTimeRemainingMs(instance) {
-        const options = instance.options;
-        if (options) {
-            const runtimeTicks = playbackManager.duration(options.player);
-
-            if (runtimeTicks) {
-                const timeRemainingTicks = runtimeTicks - playbackManager.currentTime(options.player) * 10000;
-
-                return Math.round(timeRemainingTicks / 10000);
-            }
-        }
-
-        return 0;
-    }
-
-    function startComingUpNextHideTimer(instance) {
-        const timeRemainingMs = getTimeRemainingMs(instance);
-
-        if (timeRemainingMs <= 0) {
-            return;
-        }
-
-        setNextVideoText.call(instance);
-        clearCountdownTextTimeout(instance);
-
-        instance._countdownTextTimeout = setInterval(setNextVideoText.bind(instance), 400);
-    }
+async function showStaticNextText(nextItem) {
+    const apiClient = ServerConnections.getApiClient(nextItem);
+    const currentUser = await apiClient.getCurrentUser();
+    return !currentUser.Configuration.EnableNextEpisodeAutoPlay;
+}
 
 class UpNextDialog {
     constructor(options) {
         this.options = options;
+        this.showStaticNextText = false; // default to showing countdown text
 
         init(this, options);
     }
@@ -237,10 +252,9 @@ class UpNextDialog {
         hideComingUpNext.call(this);
 
         this.options = null;
+        this.showStaticNextText = false;
         this.itemType = null;
     }
 }
 
 export default UpNextDialog;
-
-/* eslint-enable indent */

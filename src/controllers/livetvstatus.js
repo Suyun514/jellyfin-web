@@ -1,18 +1,19 @@
 import 'jquery';
-import globalize from '../scripts/globalize';
+import globalize from '../lib/globalize';
 import taskButton from '../scripts/taskbutton';
 import dom from '../scripts/dom';
 import layoutManager from '../components/layoutManager';
 import loading from '../components/loading/loading';
 import browser from '../scripts/browser';
 import '../components/listview/listview.scss';
-import '../assets/css/flexstyles.scss';
+import '../styles/flexstyles.scss';
 import '../elements/emby-itemscontainer/emby-itemscontainer';
 import '../components/cardbuilder/card.scss';
 import 'material-design-icons-iconfont';
 import '../elements/emby-button/emby-button';
-import Dashboard from '../scripts/clientUtils';
+import Dashboard from '../utils/dashboard';
 import confirm from '../components/confirm/confirm';
+import { getDefaultBackgroundClass } from '../components/cardbuilder/cardBuilderUtils';
 
 const enableFocusTransform = !browser.slow && !browser.edge;
 
@@ -37,18 +38,19 @@ function getDeviceHtml(device) {
     html += '<div class="cardScalable visualCardBox-cardScalable">';
     html += '<div class="' + padderClass + '"></div>';
     html += '<div class="cardContent searchImage">';
-    html += '<div class="cardImageContainer coveredImage"><span class="cardImageIcon material-icons dvr"></span></div>';
+    html += `<div class="cardImageContainer coveredImage ${getDefaultBackgroundClass()}"><span class="cardImageIcon material-icons dvr" aria-hidden="true"></span></div>`;
     html += '</div>';
     html += '</div>';
     html += '<div class="cardFooter visualCardBox-cardFooter">';
-    html += '<button is="paper-icon-button-light" class="itemAction btnCardOptions autoSize" data-action="menu"><span class="material-icons more_vert"></span></button>';
+    html += '<button is="paper-icon-button-light" class="itemAction btnCardOptions autoSize" data-action="menu"><span class="material-icons more_vert" aria-hidden="true"></span></button>';
     html += '<div class="cardText">' + (device.FriendlyName || getTunerName(device.Type)) + '</div>';
     html += '<div class="cardText cardText-secondary">';
     html += device.Url || '&nbsp;';
     html += '</div>';
     html += '</div>';
     html += '</div>';
-    return html += '</div>';
+    html += '</div>';
+    return html;
 }
 
 function renderDevices(page, devices) {
@@ -87,8 +89,8 @@ function submitAddDeviceForm(page) {
         type: 'POST',
         url: ApiClient.getUrl('LiveTv/TunerHosts'),
         data: JSON.stringify({
-            Type: $('#selectTunerDeviceType', page).val(),
-            Url: $('#txtDevicePath', page).val()
+            Type: page.querySelector('#selectTunerDeviceType').value,
+            Url: page.querySelector('#txtDevicePath').value
         }),
         contentType: 'application/json'
     }).then(function () {
@@ -109,7 +111,7 @@ function renderProviders(page, providers) {
         for (let i = 0, length = providers.length; i < length; i++) {
             const provider = providers[i];
             html += '<div class="listItem">';
-            html += '<span class="listItemIcon material-icons dvr"></span>';
+            html += '<span class="listItemIcon material-icons dvr" aria-hidden="true"></span>';
             html += '<div class="listItemBody two-line">';
             html += '<a is="emby-linkbutton" style="display:block;padding:0;margin:0;text-align:left;" class="clearLink" href="' + getProviderConfigurationUrl(provider.Type) + '&id=' + provider.Id + '">';
             html += '<h3 class="listItemBodyText">';
@@ -120,18 +122,24 @@ function renderProviders(page, providers) {
             html += '</div>';
             html += '</a>';
             html += '</div>';
-            html += '<button type="button" is="paper-icon-button-light" class="btnOptions" data-id="' + provider.Id + '"><span class="material-icons listItemAside more_vert"></span></button>';
+            html += '<button type="button" is="paper-icon-button-light" class="btnOptions" data-id="' + provider.Id + '"><span class="material-icons listItemAside more_vert" aria-hidden="true"></span></button>';
             html += '</div>';
         }
 
         html += '</div>';
     }
 
-    const elem = $('.providerList', page).html(html);
-    $('.btnOptions', elem).on('click', function () {
-        const id = this.getAttribute('data-id');
-        showProviderOptions(page, id, this);
-    });
+    const elem = page.querySelector('.providerList');
+    elem.innerHTML = html;
+    if (elem.querySelector('.btnOptions')) {
+        const btnOptionElements = elem.querySelectorAll('.btnOptions');
+        btnOptionElements.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const id = this.getAttribute('data-id');
+                showProviderOptions(page, id, btn);
+            });
+        });
+    }
 }
 
 function showProviderOptions(page, providerId, button) {
@@ -145,7 +153,7 @@ function showProviderOptions(page, providerId, button) {
         id: 'map'
     });
 
-    import('../components/actionSheet/actionSheet').then(({default: actionsheet}) => {
+    import('../components/actionSheet/actionSheet').then(({ default: actionsheet }) => {
         actionsheet.show({
             items: items,
             positionTo: button
@@ -163,8 +171,8 @@ function showProviderOptions(page, providerId, button) {
 }
 
 function mapChannels(page, providerId) {
-    import('../components/channelMapper/channelMapper').then(({default: channelMapper}) => {
-        new channelMapper({
+    import('../components/channelMapper/channelMapper').then(({ default: ChannelMapper }) => {
+        new ChannelMapper({
             serverId: ApiClient.serverInfo().Id,
             providerId: providerId
         }).show();
@@ -190,7 +198,7 @@ function deleteProvider(page, id) {
 }
 
 function getTunerName(providerId) {
-    switch (providerId = providerId.toLowerCase()) {
+    switch (providerId.toLowerCase()) {
         case 'm3u':
             return 'M3U';
         case 'hdhomerun':
@@ -205,7 +213,7 @@ function getTunerName(providerId) {
 }
 
 function getProviderName(providerId) {
-    switch (providerId = providerId.toLowerCase()) {
+    switch (providerId.toLowerCase()) {
         case 'schedulesdirect':
             return 'Schedules Direct';
         case 'xmltv':
@@ -216,11 +224,11 @@ function getProviderName(providerId) {
 }
 
 function getProviderConfigurationUrl(providerId) {
-    switch (providerId = providerId.toLowerCase()) {
+    switch (providerId.toLowerCase()) {
         case 'xmltv':
-            return '#!/livetvguideprovider.html?type=xmltv';
+            return '#/dashboard/livetv/guide?type=xmltv';
         case 'schedulesdirect':
-            return '#!/livetvguideprovider.html?type=schedulesdirect';
+            return '#/dashboard/livetv/guide?type=schedulesdirect';
     }
 }
 
@@ -235,7 +243,7 @@ function addProvider(button) {
         id: 'xmltv'
     });
 
-    import('../components/actionSheet/actionSheet').then(({default: actionsheet}) => {
+    import('../components/actionSheet/actionSheet').then(({ default: actionsheet }) => {
         actionsheet.show({
             items: menuItems,
             positionTo: button,
@@ -247,7 +255,7 @@ function addProvider(button) {
 }
 
 function addDevice() {
-    Dashboard.navigate('livetvtuner.html');
+    Dashboard.navigate('dashboard/livetv/tuner');
 }
 
 function showDeviceMenu(button, tunerDeviceId) {
@@ -261,7 +269,7 @@ function showDeviceMenu(button, tunerDeviceId) {
         id: 'edit'
     });
 
-    import('../components/actionSheet/actionSheet').then(({default: actionsheet}) => {
+    import('../components/actionSheet/actionSheet').then(({ default: actionsheet }) => {
         actionsheet.show({
             items: items,
             positionTo: button
@@ -272,7 +280,7 @@ function showDeviceMenu(button, tunerDeviceId) {
                     break;
 
                 case 'edit':
-                    Dashboard.navigate('livetvtuner.html?id=' + tunerDeviceId);
+                    Dashboard.navigate('dashboard/livetv/tuner?id=' + tunerDeviceId);
             }
         });
     });
@@ -288,21 +296,24 @@ function onDevicesListClick(e) {
         if (btnCardOptions) {
             showDeviceMenu(btnCardOptions, id);
         } else {
-            Dashboard.navigate('livetvtuner.html?id=' + id);
+            Dashboard.navigate('dashboard/livetv/tuner?id=' + id);
         }
     }
 }
 
 $(document).on('pageinit', '#liveTvStatusPage', function () {
     const page = this;
-    $('.btnAddDevice', page).on('click', function () {
+    page.querySelector('.btnAddDevice').addEventListener('click', function () {
         addDevice();
     });
-    $('.formAddDevice', page).on('submit', function () {
-        submitAddDeviceForm(page);
-        return false;
-    });
-    $('.btnAddProvider', page).on('click', function () {
+    if (page.querySelector('.formAddDevice')) {
+        // NOTE: unused?
+        page.querySelector('.formAddDevice').addEventListener('submit', function (e) {
+            e.preventDefault();
+            submitAddDeviceForm(page);
+        });
+    }
+    page.querySelector('.btnAddProvider').addEventListener('click', function () {
         addProvider(this);
     });
     page.querySelector('.devicesList').addEventListener('click', onDevicesListClick);
