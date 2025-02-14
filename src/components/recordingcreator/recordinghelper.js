@@ -1,11 +1,9 @@
-import globalize from '../../scripts/globalize';
+import globalize from '../../lib/globalize';
 import loading from '../loading/loading';
 import ServerConnections from '../ServerConnections';
 import toast from '../toast/toast';
 import confirm from '../confirm/confirm';
 import dialog from '../dialog/dialog';
-
-/*eslint prefer-const: "error"*/
 
 function changeRecordingToSeries(apiClient, timerId, programId, confirmTimerCancellation) {
     loading.show();

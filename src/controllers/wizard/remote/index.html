@@ -11,22 +11,15 @@
                     </label>
                     <div class="fieldDescription checkboxFieldDescription">${AllowRemoteAccessHelp}</div>
                 </div>
-                <div class="checkboxContainer checkboxContainer-withDescription">
-                    <label>
-                        <input type="checkbox" is="emby-checkbox" id="chkEnableUpnp" />
-                        <span>${LabelEnableAutomaticPortMap}</span>
-                    </label>
-                    <div class="fieldDescription checkboxFieldDescription">${LabelEnableAutomaticPortMapHelp}</div>
-                </div>
                 <br />
                 <div class="wizardNavigation">
                     <button is="emby-button" type="button" class="raised button-cancel" onclick="history.back();">
-                        <span class="material-icons arrow_back"></span>
+                        <span class="material-icons arrow_back" aria-hidden="true"></span>
                         <span>${Previous}</span>
                     </button>
                     <button is="emby-button" type="submit" class="raised button-submit">
                         <span>${Next}</span>
-                        <span class="material-icons arrow_forward"></span>
+                        <span class="material-icons arrow_forward" aria-hidden="true"></span>
                     </button>
                 </div>
             </form>

@@ -1,3 +1,4 @@
+@import '../../styles/mixins';
 
 .itemSelectionPanel {
     position: absolute;
@@ -14,10 +15,14 @@
     top: 0;
     left: 0;
     right: 0;
-    padding: 1em 0.5em;
+    padding-bottom: 1em;
     display: flex;
     align-items: center;
     z-index: 99999;
+
+    @include conditional-max(padding-left, 0.5em, env(safe-area-inset-left));
+    @include conditional-max(padding-right, 0.5em, env(safe-area-inset-right));
+    @include conditional-max(padding-top, 1em, env(safe-area-inset-top));
 }
 
 .itemSelectionCount {
@@ -33,4 +38,8 @@
 
 .withMultiSelect {
     position: relative;
+}
+
+.btnSelectionPanelOptions {
+    margin-left: auto;
 }
