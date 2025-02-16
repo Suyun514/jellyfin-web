@@ -2,8 +2,10 @@ import cardBuilder from '../../components/cardbuilder/cardBuilder';
 import imageLoader from '../../components/images/imageLoader';
 import libraryBrowser from '../../scripts/libraryBrowser';
 import loading from '../../components/loading/loading';
-import { Events } from 'jellyfin-apiclient';
 import * as userSettings from '../../scripts/settings/userSettings';
+import Events from '../../utils/events.ts';
+import { setFilterStatus } from 'components/filterdialog/filterIndicator';
+
 import '../../elements/emby-itemscontainer/emby-itemscontainer';
 
 export default function (view, params, tabContent) {
@@ -50,7 +52,9 @@ export default function (view, params, tabContent) {
             if (userSettings.libraryPageSize() > 0) {
                 query.StartIndex += query.Limit;
             }
-            reloadItems(context);
+            reloadItems(context).then(() => {
+                window.scrollTo(0, 0);
+            });
         }
 
         function onPreviousPageClick() {
@@ -61,18 +65,24 @@ export default function (view, params, tabContent) {
             if (userSettings.libraryPageSize() > 0) {
                 query.StartIndex = Math.max(0, query.StartIndex - query.Limit);
             }
-            reloadItems(context);
+            reloadItems(context).then(() => {
+                window.scrollTo(0, 0);
+            });
         }
 
         const query = getQuery();
-        context.querySelector('.paging').innerHTML = libraryBrowser.getQueryPagingHtml({
-            startIndex: query.StartIndex,
-            limit: query.Limit,
-            totalRecordCount: result.TotalRecordCount,
-            showLimit: false,
-            updatePageSizeSetting: false,
-            filterButton: false
-        });
+
+        for (const elem of context.querySelectorAll('.paging')) {
+            elem.innerHTML = libraryBrowser.getQueryPagingHtml({
+                startIndex: query.StartIndex,
+                limit: query.Limit,
+                totalRecordCount: result.TotalRecordCount,
+                showLimit: false,
+                updatePageSizeSetting: false,
+                filterButton: false
+            });
+        }
+
         const html = getChannelsHtml(result.Items);
         const elem = context.querySelector('#items');
         elem.innerHTML = html;
@@ -91,7 +101,7 @@ export default function (view, params, tabContent) {
     }
 
     function showFilterMenu(context) {
-        import('../../components/filterdialog/filterdialog').then(({default: FilterDialog}) => {
+        import('../../components/filterdialog/filterdialog').then(({ default: FilterDialog }) => {
             const filterDialog = new FilterDialog({
                 query: getQuery(),
                 mode: 'livetvchannels',
@@ -108,15 +118,17 @@ export default function (view, params, tabContent) {
         loading.show();
         isLoading = true;
         const query = getQuery();
+        setFilterStatus(context, query);
+
         const apiClient = ApiClient;
         query.UserId = apiClient.getCurrentUserId();
-        apiClient.getLiveTvChannels(query).then(function (result) {
+        return apiClient.getLiveTvChannels(query).then(function (result) {
             renderChannels(context, result);
             loading.hide();
             isLoading = false;
 
-            import('../../components/autoFocuser').then(({default: autoFocuser}) => {
-                autoFocuser.autoFocus(view);
+            import('../../components/autoFocuser').then(({ default: autoFocuser }) => {
+                autoFocuser.autoFocus(context);
             });
         });
     }

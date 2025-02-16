@@ -1,10 +1,10 @@
 import dialogHelper from '../dialogHelper/dialogHelper';
-import globalize from '../../scripts/globalize';
+import globalize from '../../lib/globalize';
 import layoutManager from '../layoutManager';
 import loading from '../loading/loading';
 import scrollHelper from '../../scripts/scrollHelper';
 import datetime from '../../scripts/datetime';
-import '../../assets/css/scrollstyles.scss';
+import '../../styles/scrollstyles.scss';
 import '../../elements/emby-button/emby-button';
 import '../../elements/emby-checkbox/emby-checkbox';
 import '../../elements/emby-input/emby-input';
@@ -13,11 +13,9 @@ import '../../elements/emby-button/paper-icon-button-light';
 import '../formdialog.scss';
 import './recordingcreator.scss';
 import 'material-design-icons-iconfont';
-import '../../assets/css/flexstyles.scss';
+import '../../styles/flexstyles.scss';
 import ServerConnections from '../ServerConnections';
 import template from './seriesrecordingeditor.template.html';
-
-/*eslint prefer-const: "error"*/
 
 let currentDialog;
 let recordingUpdated = false;
@@ -45,7 +43,7 @@ function renderTimer(context, item) {
     context.querySelector('.selectKeepUpTo').value = item.KeepUpTo || 0;
 
     if (item.ChannelName || item.ChannelNumber) {
-        context.querySelector('.optionChannelOnly').innerHTML = globalize.translate('ChannelNameOnly', item.ChannelName || item.ChannelNumber);
+        context.querySelector('.optionChannelOnly').innerText = globalize.translate('ChannelNameOnly', item.ChannelName || item.ChannelNumber);
     } else {
         context.querySelector('.optionChannelOnly').innerHTML = globalize.translate('OneChannel');
     }

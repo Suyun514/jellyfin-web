@@ -1,46 +1,21 @@
-import React, { FunctionComponent, useEffect, useState } from 'react';
+import React, { FunctionComponent } from 'react';
 
-import { appRouter } from '../appRouter';
-import globalize from '../../scripts/globalize';
-import ServerConnections from '../ServerConnections';
+import Loading from 'components/loading/LoadingComponent';
+import { appRouter } from '../router/appRouter';
+import { useSearchSuggestions } from 'hooks/searchHook/useSearchSuggestions';
+import globalize from 'lib/globalize';
+import LinkButton from '../../elements/emby-button/LinkButton';
 
 import '../../elements/emby-button/emby-button';
 
-// There seems to be some compatibility issues here between
-// React and our legacy web components, so we need to inject
-// them as an html string for now =/
-const createSuggestionLink = ({name, href}) => ({
-    __html: `<a
-    is='emby-linkbutton'
-    class='button-link'
-    style='display: inline-block; padding: 0.5em 1em;'
-    href='${href}'
->${name}</a>`
-});
-
 type SearchSuggestionsProps = {
-    serverId?: string;
-    parentId?: string;
-}
+    parentId?: string | null;
+};
 
-const SearchSuggestions: FunctionComponent<SearchSuggestionsProps> = ({ serverId, parentId }: SearchSuggestionsProps) => {
-    const [ suggestions, setSuggestions ] = useState([]);
+const SearchSuggestions: FunctionComponent<SearchSuggestionsProps> = ({ parentId }) => {
+    const { isLoading, data: suggestions } = useSearchSuggestions(parentId || undefined);
 
-    useEffect(() => {
-        // TODO: Remove type casting once we're using a properly typed API client
-        const apiClient = (ServerConnections as any).getApiClient(serverId);
-
-        apiClient.getItems(apiClient.getCurrentUserId(), {
-            SortBy: 'IsFavoriteOrLiked,Random',
-            IncludeItemTypes: 'Movie,Series,MusicArtist',
-            Limit: 20,
-            Recursive: true,
-            ImageTypeLimit: 0,
-            EnableImages: false,
-            ParentId: parentId,
-            EnableTotalRecordCount: false
-        }).then(result => setSuggestions(result.Items));
-    }, [parentId, serverId]);
+    if (isLoading) return <Loading />;
 
     return (
         <div
@@ -54,14 +29,16 @@ const SearchSuggestions: FunctionComponent<SearchSuggestionsProps> = ({ serverId
             </div>
 
             <div className='searchSuggestionsList padded-left padded-right'>
-                {suggestions.map(item => (
-                    <div
-                        key={`suggestion-${item.Id}`}
-                        dangerouslySetInnerHTML={createSuggestionLink({
-                            name: item.Name,
-                            href: appRouter.getRouteUrl(item)
-                        })}
-                    />
+                {suggestions?.map(item => (
+                    <div key={item.Id}>
+                        <LinkButton
+                            className='button-link'
+                            style={{ display: 'inline-block', padding: '0.5em 1em' }}
+                            href={appRouter.getRouteUrl(item)}
+                        >
+                            {item.Name}
+                        </LinkButton>
+                    </div>
                 ))}
             </div>
         </div>

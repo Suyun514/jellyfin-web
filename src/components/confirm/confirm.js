@@ -1,17 +1,13 @@
-import { appRouter } from '../appRouter';
+import { appRouter } from '../router/appRouter';
 import browser from '../../scripts/browser';
 import dialog from '../dialog/dialog';
-import globalize from '../../scripts/globalize';
-
-function replaceAll(str, find, replace) {
-    return str.split(find).join(replace);
-}
+import globalize from '../../lib/globalize';
 
 function useNativeConfirm() {
     // webOS seems to block modals
     // Tizen 2.x seems to block modals
     return !browser.web0s
-        && !(browser.tizenVersion && browser.tizenVersion < 3)
+        && !(browser.tizenVersion && (browser.tizenVersion < 3 || browser.tizenVersion >= 8))
         && browser.tv
         && window.confirm;
 }
@@ -24,7 +20,7 @@ async function nativeConfirm(options) {
         };
     }
 
-    const text = replaceAll(options.text || '', '<br/>', '\n');
+    const text = (options.text || '').replaceAll('<br/>', '\n');
     await appRouter.ready();
     const result = window.confirm(text);
 

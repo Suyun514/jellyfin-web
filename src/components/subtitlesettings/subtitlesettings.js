@@ -1,4 +1,4 @@
-import globalize from '../../scripts/globalize';
+import globalize from '../../lib/globalize';
 import { appHost } from '../apphost';
 import appSettings from '../../scripts/settings/appSettings';
 import focusManager from '../focusManager';
@@ -7,13 +7,13 @@ import loading from '../loading/loading';
 import subtitleAppearanceHelper from './subtitleappearancehelper';
 import settingsHelper from '../settingshelper';
 import dom from '../../scripts/dom';
-import { Events } from 'jellyfin-apiclient';
+import Events from '../../utils/events.ts';
 import '../listview/listview.scss';
 import '../../elements/emby-select/emby-select';
 import '../../elements/emby-slider/emby-slider';
 import '../../elements/emby-input/emby-input';
 import '../../elements/emby-checkbox/emby-checkbox';
-import '../../assets/css/flexstyles.scss';
+import '../../styles/flexstyles.scss';
 import './subtitlesettings.scss';
 import ServerConnections from '../ServerConnections';
 import toast from '../toast/toast';
@@ -25,16 +25,16 @@ import template from './subtitlesettings.template.html';
  */
 
 function getSubtitleAppearanceObject(context) {
-    const appearanceSettings = {};
-
-    appearanceSettings.textSize = context.querySelector('#selectTextSize').value;
-    appearanceSettings.dropShadow = context.querySelector('#selectDropShadow').value;
-    appearanceSettings.font = context.querySelector('#selectFont').value;
-    appearanceSettings.textBackground = context.querySelector('#inputTextBackground').value;
-    appearanceSettings.textColor = context.querySelector('#inputTextColor').value;
-    appearanceSettings.verticalPosition = context.querySelector('#sliderVerticalPosition').value;
-
-    return appearanceSettings;
+    return {
+        subtitleStyling: context.querySelector('#selectSubtitleStyling').value,
+        textSize: context.querySelector('#selectTextSize').value,
+        textWeight: context.querySelector('#selectTextWeight').value,
+        dropShadow: context.querySelector('#selectDropShadow').value,
+        font: context.querySelector('#selectFont').value,
+        textBackground: context.querySelector('#inputTextBackground').value,
+        textColor: layoutManager.tv ? context.querySelector('#selectTextColor').value : context.querySelector('#inputTextColor').value,
+        verticalPosition: context.querySelector('#sliderVerticalPosition').value
+    };
 }
 
 function loadForm(context, user, userSettings, appearanceSettings, apiClient) {
@@ -52,14 +52,22 @@ function loadForm(context, user, userSettings, appearanceSettings, apiClient) {
 
         context.querySelector('#selectSubtitlePlaybackMode').dispatchEvent(new CustomEvent('change', {}));
 
+        context.querySelector('#selectSubtitleStyling').value = appearanceSettings.subtitleStyling || 'Auto';
+        context.querySelector('#selectSubtitleStyling').dispatchEvent(new CustomEvent('change', {}));
         context.querySelector('#selectTextSize').value = appearanceSettings.textSize || '';
+        context.querySelector('#selectTextWeight').value = appearanceSettings.textWeight || 'normal';
         context.querySelector('#selectDropShadow').value = appearanceSettings.dropShadow || '';
         context.querySelector('#inputTextBackground').value = appearanceSettings.textBackground || 'transparent';
+        context.querySelector('#selectTextColor').value = appearanceSettings.textColor || '#ffffff';
         context.querySelector('#inputTextColor').value = appearanceSettings.textColor || '#ffffff';
         context.querySelector('#selectFont').value = appearanceSettings.font || '';
         context.querySelector('#sliderVerticalPosition').value = appearanceSettings.verticalPosition;
 
         context.querySelector('#selectSubtitleBurnIn').value = appSettings.get('subtitleburnin') || '';
+        context.querySelector('#chkSubtitleRenderPgs').checked = appSettings.get('subtitlerenderpgs') === 'true';
+
+        context.querySelector('#selectSubtitleBurnIn').dispatchEvent(new CustomEvent('change', {}));
+        context.querySelector('#chkAlwaysBurnInSubtitleWhenTranscoding').checked = appSettings.alwaysBurnInSubtitleWhenTranscoding();
 
         onAppearanceFieldChange({
             target: context.querySelector('#selectTextSize')
@@ -85,6 +93,8 @@ function save(instance, context, userId, userSettings, apiClient, enableSaveConf
     loading.show();
 
     appSettings.set('subtitleburnin', context.querySelector('#selectSubtitleBurnIn').value);
+    appSettings.set('subtitlerenderpgs', context.querySelector('#chkSubtitleRenderPgs').checked);
+    appSettings.alwaysBurnInSubtitleWhenTranscoding(context.querySelector('#chkAlwaysBurnInSubtitleWhenTranscoding').checked);
 
     apiClient.getUser(userId).then(function (user) {
         saveUser(context, user, userSettings, instance.appearanceKey, apiClient).then(function () {
@@ -108,6 +118,24 @@ function onSubtitleModeChange(e) {
         subtitlesHelp[i].classList.add('hide');
     }
     view.querySelector('.subtitles' + this.value + 'Help').classList.remove('hide');
+}
+
+function onSubtitleStyleChange(e) {
+    const view = dom.parentWithClass(e.target, 'subtitlesettings');
+
+    const subtitleStylingHelperElements = view.querySelectorAll('.subtitleStylingHelp');
+    subtitleStylingHelperElements.forEach((elem)=>{
+        elem.classList.add('hide');
+    });
+    view.querySelector(`.subtitleStyling${this.value}Help`).classList.remove('hide');
+}
+
+function onSubtitleBurnInChange(e) {
+    const view = dom.parentWithClass(e.target, 'subtitlesettings');
+    const fieldRenderPgs = view.querySelector('.fldRenderPgs');
+
+    // Pgs option is only available if burn-in mode is set to 'auto' (empty string)
+    fieldRenderPgs.classList.toggle('hide', !!this.value);
 }
 
 function onAppearanceFieldChange(e) {
@@ -165,9 +193,13 @@ function embed(options, self) {
     options.element.querySelector('form').addEventListener('submit', self.onSubmit.bind(self));
 
     options.element.querySelector('#selectSubtitlePlaybackMode').addEventListener('change', onSubtitleModeChange);
+    options.element.querySelector('#selectSubtitleStyling').addEventListener('change', onSubtitleStyleChange);
+    options.element.querySelector('#selectSubtitleBurnIn').addEventListener('change', onSubtitleBurnInChange);
     options.element.querySelector('#selectTextSize').addEventListener('change', onAppearanceFieldChange);
+    options.element.querySelector('#selectTextWeight').addEventListener('change', onAppearanceFieldChange);
     options.element.querySelector('#selectDropShadow').addEventListener('change', onAppearanceFieldChange);
     options.element.querySelector('#selectFont').addEventListener('change', onAppearanceFieldChange);
+    options.element.querySelector('#selectTextColor').addEventListener('change', onAppearanceFieldChange);
     options.element.querySelector('#inputTextColor').addEventListener('change', onAppearanceFieldChange);
     options.element.querySelector('#inputTextBackground').addEventListener('change', onAppearanceFieldChange);
 
@@ -198,6 +230,10 @@ function embed(options, self) {
                 sliderVerticalPosition.classList.add('focusable');
                 sliderVerticalPosition.enableKeyboardDragging();
             }, 0);
+
+            // Replace color picker
+            dom.parentWithTag(options.element.querySelector('#inputTextColor'), 'DIV').classList.add('hide');
+            dom.parentWithTag(options.element.querySelector('#selectTextColor'), 'DIV').classList.remove('hide');
         }
 
         options.element.querySelector('.chkPreview').addEventListener('change', (e) => {

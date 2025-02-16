@@ -86,7 +86,7 @@
     "ButtonMore": "Okwengeziwe",
     "ButtonInfo": "Ulwazi",
     "ButtonFullscreen": "Isikrini esigcwele",
-    "ButtonCast": "Thumela",
+    "ButtonCast": "Thumela imidiya",
     "ButtonCancel": "Khansela",
     "ButtonBack": "Emuva",
     "ButtonArrowRight": "Okwesokudla",
@@ -113,5 +113,7 @@
     "Aired": "Kusakazwa",
     "Add": "Yengeza",
     "Actor": "Umlingisi",
-    "Absolute": "Impela"
+    "Absolute": "Impela",
+    "HeaderAlbumArtists": "Abasethi wenkulumo",
+    "HeaderContinueWatching": "Buyela Ukubona"
 }

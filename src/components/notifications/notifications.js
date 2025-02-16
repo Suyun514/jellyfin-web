@@ -1,7 +1,11 @@
 import serverNotifications from '../../scripts/serverNotifications';
 import { playbackManager } from '../playback/playbackmanager';
-import { Events } from 'jellyfin-apiclient';
-import globalize from '../../scripts/globalize';
+import Events from '../../utils/events.ts';
+import globalize from '../../lib/globalize';
+import { getItems } from '../../utils/jellyfin-apiclient/getItems.ts';
+import ServerConnections from '../../components/ServerConnections';
+
+import NotificationIcon from './notificationicon.png';
 
 function onOneDocumentClick() {
     document.removeEventListener('click', onOneDocumentClick);
@@ -14,8 +18,27 @@ function onOneDocumentClick() {
     }
 }
 
-document.addEventListener('click', onOneDocumentClick);
-document.addEventListener('keydown', onOneDocumentClick);
+function registerOneDocumentClickHandler() {
+    Events.off(ServerConnections, 'localusersignedin', registerOneDocumentClickHandler);
+
+    document.addEventListener('click', onOneDocumentClick);
+    document.addEventListener('keydown', onOneDocumentClick);
+}
+
+function initPermissionRequest() {
+    const apiClient = ServerConnections.currentApiClient();
+    if (apiClient) {
+        apiClient.getCurrentUser()
+            .then(() => registerOneDocumentClickHandler())
+            .catch(() => {
+                Events.on(ServerConnections, 'localusersignedin', registerOneDocumentClickHandler);
+            });
+    } else {
+        registerOneDocumentClickHandler();
+    }
+}
+
+initPermissionRequest();
 
 let serviceWorkerRegistration;
 
@@ -71,8 +94,8 @@ function showNotification(options, timeoutMs, apiClient) {
 
     options.data = options.data || {};
     options.data.serverId = apiClient.serverInfo().Id;
-    options.icon = options.icon || getIconUrl();
-    options.badge = options.badge || getIconUrl('badge.png');
+    options.icon = options.icon || NotificationIcon;
+    options.badge = options.badge || NotificationIcon;
 
     resetRegistration();
 
@@ -128,7 +151,7 @@ function onLibraryChanged(data, apiClient) {
         newItems.length = 12;
     }
 
-    apiClient.getItems(apiClient.getCurrentUserId(), {
+    getItems(apiClient, apiClient.getCurrentUserId(), {
 
         Recursive: true,
         Limit: 3,
@@ -146,11 +169,6 @@ function onLibraryChanged(data, apiClient) {
             showNewItemNotification(item, apiClient);
         }
     });
-}
-
-function getIconUrl(name) {
-    name = name || 'notificationicon.png';
-    return './components/notifications/' + name;
 }
 
 function showPackageInstallNotification(apiClient, installation, status) {
@@ -180,7 +198,7 @@ function showPackageInstallNotification(apiClient, installation, status) {
                     {
                         action: 'cancel-install',
                         title: globalize.translate('ButtonCancel'),
-                        icon: getIconUrl()
+                        icon: NotificationIcon
                     }
                 ];
 
@@ -249,7 +267,7 @@ Events.on(serverNotifications, 'RestartRequired', function (e, apiClient) {
             {
                 action: 'restart',
                 title: globalize.translate('Restart'),
-                icon: getIconUrl()
+                icon: NotificationIcon
             }
         ];
 

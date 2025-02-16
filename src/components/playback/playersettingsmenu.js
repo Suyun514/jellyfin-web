@@ -1,6 +1,6 @@
 import actionsheet from '../actionSheet/actionSheet';
 import { playbackManager } from '../playback/playbackmanager';
-import globalize from '../../scripts/globalize';
+import globalize from '../../lib/globalize';
 import qualityoptions from '../qualityOptions';
 import ServerConnections from '../ServerConnections';
 
@@ -8,14 +8,15 @@ function showQualityMenu(player, btn) {
     const videoStream = playbackManager.currentMediaSource(player).MediaStreams.filter(function (stream) {
         return stream.Type === 'Video';
     })[0];
-    const videoWidth = videoStream ? videoStream.Width : null;
-    const videoHeight = videoStream ? videoStream.Height : null;
+
+    const videoCodec = videoStream ? videoStream.Codec : null;
+    const videoBitRate = videoStream ? videoStream.BitRate : null;
 
     const options = qualityoptions.getVideoQualityOptions({
         currentMaxBitrate: playbackManager.getMaxStreamingBitrate(player),
         isAutomaticBitrateEnabled: playbackManager.enableAutomaticBitrateDetection(player),
-        videoWidth: videoWidth,
-        videoHeight: videoHeight,
+        videoCodec,
+        videoBitRate,
         enableAuto: true
     });
 
@@ -43,10 +44,10 @@ function showQualityMenu(player, btn) {
         items: menuItems,
         positionTo: btn
     }).then(function (id) {
-        const bitrate = parseInt(id);
+        const bitrate = parseInt(id, 10);
         if (bitrate !== selectedBitrate) {
             playbackManager.setMaxStreamingBitrate({
-                enableAutomaticBitrateDetection: bitrate ? false : true,
+                enableAutomaticBitrateDetection: !bitrate,
                 maxBitrate: bitrate
             }, player);
         }
@@ -199,7 +200,8 @@ function showWithUser(options, player, user) {
         });
     }
 
-    if (user && user.Policy.EnableVideoPlaybackTranscoding) {
+    if (options.quality && supportedCommands.includes('SetMaxStreamingBitrate')
+            && user?.Policy?.EnableVideoPlaybackTranscoding) {
         const secondaryQualityText = getQualitySecondaryText(player);
 
         menuItems.push({
@@ -247,7 +249,7 @@ export function show(options) {
     const player = options.player;
     const currentItem = playbackManager.currentItem(player);
 
-    if (!currentItem || !currentItem.ServerId) {
+    if (!currentItem?.ServerId) {
         return showWithUser(options, player, null);
     }
 

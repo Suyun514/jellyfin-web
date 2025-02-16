@@ -3,6 +3,7 @@
  * @module components/input/keyboardnavigation
  */
 
+import browser from './browser';
 import inputManager from './inputManager';
 import layoutManager from '../components/layoutManager';
 import appSettings from './settings/appSettings';
@@ -42,7 +43,22 @@ const KeyNames = {
 /**
  * Keys used for keyboard navigation.
  */
-const NavigationKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+const NavigationKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'BrowserHome', 'Find'];
+
+/**
+ * Keys used for media playback control.
+ */
+const MediaKeys = ['MediaRewind', 'MediaStop', 'MediaPlay', 'MediaFastForward', 'MediaTrackPrevious', 'MediaTrackNext', 'MediaPlayPause'];
+
+/**
+ * Elements for which navigation should be constrained.
+ */
+const InteractiveElements = ['INPUT', 'TEXTAREA'];
+
+/**
+ * Types of INPUT element for which navigation shouldn't be constrained.
+ */
+const NonInteractiveInputElements = ['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'reset', 'submit'];
 
 let hasFieldKey = false;
 try {
@@ -78,8 +94,42 @@ export function isNavigationKey(key) {
     return NavigationKeys.indexOf(key) != -1;
 }
 
+/**
+ * Returns _true_ if key is used for media playback control.
+ *
+ * @param {string} key - Key name.
+ * @return {boolean} _true_ if key is used for media playback control.
+ */
+export function isMediaKey(key) {
+    return MediaKeys.includes(key);
+}
+
+/**
+ * Returns _true_ if the element is interactive.
+ *
+ * @param {Element} element - Element.
+ * @return {boolean} _true_ if the element is interactive.
+ */
+export function isInteractiveElement(element) {
+    if (element && InteractiveElements.includes(element.tagName)) {
+        if (element.tagName === 'INPUT') {
+            return !NonInteractiveInputElements.includes(element.type);
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 export function enable() {
+    const hasMediaSession = 'mediaSession' in navigator;
     window.addEventListener('keydown', function (e) {
+        if (e.defaultPrevented) return;
+
+        // Skip modified keys
+        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+
         const key = getKeyName(e);
 
         // Ignore navigation keys for non-TV
@@ -87,17 +137,30 @@ export function enable() {
             return;
         }
 
+        // Ignore Media Keys for non-TV platform having MediaSession API
+        if (!browser.tv && isMediaKey(key) && hasMediaSession) {
+            return;
+        }
+
         let capture = true;
 
         switch (key) {
             case 'ArrowLeft':
-                inputManager.handleCommand('left');
+                if (!isInteractiveElement(document.activeElement)) {
+                    inputManager.handleCommand('left');
+                } else {
+                    capture = false;
+                }
                 break;
             case 'ArrowUp':
                 inputManager.handleCommand('up');
                 break;
             case 'ArrowRight':
-                inputManager.handleCommand('right');
+                if (!isInteractiveElement(document.activeElement)) {
+                    inputManager.handleCommand('right');
+                } else {
+                    capture = false;
+                }
                 break;
             case 'ArrowDown':
                 inputManager.handleCommand('down');
@@ -107,12 +170,28 @@ export function enable() {
                 inputManager.handleCommand('back');
                 break;
 
+            // HACK: Hisense TV (VIDAA OS) uses Backspace for Back action
+            case 'Backspace':
+                if (browser.tv && browser.hisense && browser.vidaa) {
+                    inputManager.handleCommand('back');
+                } else {
+                    capture = false;
+                }
+                break;
+
             case 'Escape':
                 if (layoutManager.tv) {
                     inputManager.handleCommand('back');
                 } else {
                     capture = false;
                 }
+                break;
+
+            case 'Find':
+                inputManager.handleCommand('search');
+                break;
+            case 'BrowserHome':
+                inputManager.handleCommand('home');
                 break;
 
             case 'MediaPlay':
@@ -156,7 +235,6 @@ export function enable() {
 function attachGamepadScript() {
     console.log('Gamepad connected! Attaching gamepadtokey.js script');
     window.removeEventListener('gamepadconnected', attachGamepadScript);
-    /* eslint-disable-next-line  @babel/no-unused-expressions */
     import('./gamepadtokey');
 }
 
